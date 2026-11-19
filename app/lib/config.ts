@@ -12,8 +12,9 @@ REGISTER: "/register",
 DASHBOARD: "/dashboard",
 },
 ENDPOINTS: {
-LOGIN: "/auth/login",
-REGISTER: "/auth/register",
-POSITIONS: "/positions",
-},
+    LOGIN: "/auth/login",
+    REGISTER: "/auth/register",
+    POSITIONS: "/positions",
+    EXPENSES: "/expenses",
+  },
 } as const;

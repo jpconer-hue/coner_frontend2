@@ -1,22 +1,215 @@
-
 "use client";
 
+import { clearTokens, getUserId } from "../lib/auth";
+
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Eye,
+  LogOut,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useAuthGuard } from "../Hooks/useAuthGuard";
-import { clearTokens } from "../lib/auth";
+import { apiClient } from "../lib/api";
+// import { clearTokens } from "@/lib/auth";
 import { CONFIG } from "../lib/config";
-
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-import { Home, LayoutDashboard, Wallet, Banknote, ShoppingBag, PiggyBank, Tags, LogOut} from "lucide-react";
+interface Position {
+  position_id: number;
+  position_code: string;
+  position_name: string;
+  id?: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isChecking } = useAuthGuard({ requireAuth: true });
 
-  const { isChecking } = useAuthGuard({
-    requireAuth: true,
-  });
+  // Data states
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Form states (shared for Create and Update)
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [positionCode, setPositionCode] = useState("");
+  const [positionName, setPositionName] = useState("");
+
+  // READ (All Positions)
+  const fetchPositions = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiClient<Position[]>(CONFIG.ENDPOINTS.POSITIONS, {
+        method: "GET",
+        requiresAuth: true,
+      });
+      setPositions(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch positions.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isChecking) {
+      fetchPositions();
+    }
+  }, [isChecking, fetchPositions]);
+
+  // READ (Single Position)
+  const handleViewPosition = async (positionId: number) => {
+    setError("");
+    setSuccess("");
+    try {
+      const data = await apiClient<Position>(
+        `${CONFIG.ENDPOINTS.POSITIONS}/${positionId}`,
+        {
+          method: "GET",
+          requiresAuth: true,
+        }
+      );
+      setSelectedPosition(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to load position details.");
+    }
+  };
+
+  // Open Form for CREATE
+  const openCreateForm = () => {
+    setEditingId(null);
+    setPositionCode("");
+    setPositionName("");
+    setSelectedPosition(null);
+    setError("");
+    setSuccess("");
+    setIsFormOpen(true);
+  };
+
+  // Open Form for UPDATE
+  const openEditForm = (position: Position) => {
+    setEditingId(position.position_id);
+    setPositionCode(position.position_code);
+    setPositionName(position.position_name);
+    setSelectedPosition(null);
+    setError("");
+    setSuccess("");
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setEditingId(null);
+    setPositionCode("");
+    setPositionName("");
+  };
+
+  // CREATE & UPDATE Submit Handler
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+
+    const userId = getUserId();
+    if (!userId) {
+      setError("Unable to determine user ID from token. Please log in again.");
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      if (editingId !== null) {
+        // UPDATE (PUT /positions/:id)
+        await apiClient(`${CONFIG.ENDPOINTS.POSITIONS}/${editingId}`, {
+          method: "PUT",
+          requiresAuth: true,
+          body: JSON.stringify({
+            position_code: positionCode,
+            position_name: positionName,
+            id: userId,
+          }),
+        });
+        setSuccess(`Position #${editingId} updated successfully.`);
+      } else {
+        // CREATE (POST /positions)
+        await apiClient(CONFIG.ENDPOINTS.POSITIONS, {
+          method: "POST",
+          requiresAuth: true,
+          body: JSON.stringify({
+            position_code: positionCode,
+            position_name: positionName,
+            id: userId,
+          }),
+        });
+        setSuccess("New position created successfully.");
+      }
+
+      closeForm();
+      await fetchPositions();
+    } catch (err: any) {
+      setError(err.message || "Operation failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // DELETE (DELETE /positions/:id)
+  const handleDelete = async (positionId: number) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete Position #${positionId}?`
+    );
+    if (!confirmed) return;
+
+    setError("");
+    setSuccess("");
+    try {
+      await apiClient(`${CONFIG.ENDPOINTS.POSITIONS}/${positionId}`, {
+        method: "DELETE",
+        requiresAuth: true,
+      });
+
+      if (selectedPosition?.position_id === positionId) {
+        setSelectedPosition(null);
+      }
+
+      setSuccess(`Position #${positionId} deleted successfully.`);
+      await fetchPositions();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete position.");
+    }
+  };
 
   const handleLogout = () => {
     clearTokens();
@@ -24,263 +217,265 @@ export default function DashboardPage() {
   };
 
   if (isChecking) {
-    return <p className="p-10">Loading...</p>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-muted-foreground">Verifying session...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-100">
-
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 hidden h-screen w-60 border-r bg-white p-6 md:flex md:flex-col">
-
-        <h2 className="mb-2 text-lg font-bold text-green-600">
-          Student Finance Tracker
-        </h2>
-
-        <p className="mb-10 text-xs text-gray-400">
-          Track your money wisely
-        </p>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-3">
-
-          <a href="#home"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <Home size={19} />
-            Home
-          </a>
-
-          <a href="#dashboard"
-            className="flex items-center gap-3 rounded-lg border border-green-400 bg-green-50 p-3 font-semibold text-green-600">
-            <LayoutDashboard size={19} />
-            Dashboard
-          </a>
-
-          <a href="#budget"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <Wallet size={19} />
-            My Budget
-          </a>
-
-          <a href="#allowance"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <Banknote size={19} />
-            Allowance
-          </a>
-
-          <a href="#expenses"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <ShoppingBag size={19} />
-            Expenses
-          </a>
-
-          <a href="#savings"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <PiggyBank size={19} />
-            Savings
-          </a>
-
-          <a href="#categories"
-            className="flex items-center gap-3 rounded-lg p-3 text-gray-600 hover:bg-green-50">
-            <Tags size={19} />
-            Categories
-          </a>
-
-        </nav>
-
-        {/* Logout at the bottom */}
-        <div className="border-t pt-5">
-          <Button
-            variant="outline"
-            className="w-full justify-start text-red-500 hover:bg-red-50"
-            onClick={handleLogout}
-          >
-            <LogOut size={19} className="mr-3" />
+    <div className="min-h-screen p-6 md:p-8 bg-background">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Top Navbar */}
+        <header className="flex justify-between items-center border-b pb-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage organization positions
+            </p>
+          </div>
+          <Button variant="destructive" onClick={handleLogout}>
+            <LogOut className="w-4 h-4 mr-2" />
             Logout
           </Button>
-        </div>
+        </header>
 
-      </aside>
-
-      {/* Main Dashboard */}
-      <main className="p-5 md:ml-60 md:p-8">
-
-        <div className="mx-auto max-w-6xl">
-
-          {/* Header */}
-          <div id="home" className="mb-6 flex items-center justify-between">
-            <div>
-              <h1 id="dashboard" className="text-2xl font-bold text-gray-800">
-                Dashboard
-              </h1>
-
-              
-            </div>
-
-            {/* Mobile Logout */}
-            <Button
-              variant="outline"
-              className="md:hidden"
-              onClick={handleLogout}
-            >
-              <LogOut size={18} />
-            </Button>
+        {/* Status Notifications */}
+        {error && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-950/50 rounded-md border border-red-200 dark:border-red-900">
+            {error}
           </div>
-
-          {/* Financial Summary */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
-            <Card id="budget" className="border-green-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">
-                    Total Budget
-                  </p>
-                  <Wallet className="text-green-500" size={24} />
-                </div>
-
-                <h2 className="text-2xl font-bold text-green-600">
-                  ₱0
-                </h2>
-
-                <p className="mt-2 text-xs text-gray-400">
-                  Your planned budget
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card id="allowance" className="border-green-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">
-                    Total Allowance
-                  </p>
-                  <Banknote className="text-blue-500" size={24} />
-                </div>
-
-                <h2 className="text-2xl font-bold text-blue-600">
-                  ₱0
-                </h2>
-
-                <p className="mt-2 text-xs text-gray-400">
-                  Your received allowance
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-green-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">
-                    Total Expenses
-                  </p>
-                  <ShoppingBag className="text-red-500" size={24} />
-                </div>
-
-                <h2 className="text-2xl font-bold text-red-500">
-                  ₱0
-                </h2>
-
-                <p className="mt-2 text-xs text-gray-400">
-                  Your total spending
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card id="savings" className="border-green-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">
-                    Total Savings
-                  </p>
-                  <PiggyBank className="text-purple-500" size={24} />
-                </div>
-
-                <h2 className="text-2xl font-bold text-purple-600">
-                  ₱0
-                </h2>
-
-                <p className="mt-2 text-xs text-gray-400">
-                  Your saved money
-                </p>
-              </CardContent>
-            </Card>
-
+        )}
+        {success && (
+          <div className="p-3 text-sm text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 rounded-md border border-emerald-200 dark:border-emerald-900">
+            {success}
           </div>
+        )}
 
-
-          {/* Recent Expenses */}
-          <Card id="expenses" className="mt-5 border-green-200 shadow-sm">
-
-            <CardHeader>
-              <CardTitle>
-                Recent Expenses
-              </CardTitle>
-
-              <p className="text-sm text-gray-400">
-                Check your latest spending activities.
-              </p>
+        {/* CREATE / UPDATE Form Card */}
+        {isFormOpen && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle>
+                  {editingId !== null
+                    ? `Update Position #${editingId}`
+                    : "Create New Position"}
+                </CardTitle>
+                <CardDescription>
+                  {editingId !== null
+                    ? "Modify the position code and name below."
+                    : "Fill in the details to add a new position."}
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeForm}>
+                <X className="w-4 h-4" />
+              </Button>
             </CardHeader>
-
             <CardContent>
-              <div className="overflow-x-auto">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="position_code">Position Code</Label>
+                    <Input
+                      id="position_code"
+                      placeholder="e.g. Pres"
+                      value={positionCode}
+                      onChange={(e) => setPositionCode(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="position_name">Position Name</Label>
+                    <Input
+                      id="position_name"
+                      placeholder="e.g. President"
+                      value={positionName}
+                      onChange={(e) => setPositionName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={closeForm}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting
+                      ? "Saving..."
+                      : editingId !== null
+                      ? "Save Changes"
+                      : "Create Position"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
-                <table className="w-full text-left text-sm">
-
-                  <thead className="border-b text-gray-500">
-                    <tr>
-                      <th className="p-3">Category</th>
-                      <th className="p-3">Date</th>
-                      <th className="p-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-
-                    <tr className="border-b">
-                      <td className="p-3">Shopping</td>
-                      <td className="p-3">2026-09-29</td>
-                      <td className="p-3 text-right font-semibold text-red-500">
-                        -₱0
-                      </td>
-                    </tr>
-
-                    <tr className="border-b">
-                      <td className="p-3">Food and Transportation</td>
-                      <td className="p-3">2026-09-18</td>
-                      <td className="p-3 text-right font-semibold text-red-500">
-                        -₱0
-                      </td>
-                    </tr>
-
-                    <tr className="border-b">
-                      <td className="p-3">Entertainment</td>
-                      <td className="p-3">2026-09-15</td>
-                      <td className="p-3 text-right font-semibold text-red-500">
-                        -₱0
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td className="p-3">Rent</td>
-                      <td className="p-3">2026-09-01</td>
-                      <td className="p-3 text-right font-semibold text-red-500">
-                        -₱0
-                      </td>
-                    </tr>
-
-                  </tbody>
-                </table>
-
+        {/* READ Single Item Details Card */}
+        {selectedPosition && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle>
+                  Position Details (#{selectedPosition.position_id})
+                </CardTitle>
+                <CardDescription>
+                  Fetched directly from GET /positions/
+                  {selectedPosition.position_id}
+                </CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSelectedPosition(null)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground block">Position ID</span>
+                <span className="font-medium">
+                  {selectedPosition.position_id}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Code</span>
+                <span className="font-medium">
+                  {selectedPosition.position_code}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Name</span>
+                <span className="font-medium">
+                  {selectedPosition.position_name}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Created At</span>
+                <span className="font-medium">
+                  {selectedPosition.created_at
+                    ? new Date(selectedPosition.created_at).toLocaleDateString()
+                    : "N/A"}
+                </span>
               </div>
             </CardContent>
           </Card>
+        )}
 
-          {/* Footer */}
-         
-
-        </div>
-      </main>
+        {/* Positions Table Card */}
+        <Card>
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Positions</CardTitle>
+              <CardDescription>
+                A list of all positions stored in the backend.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={fetchPositions}
+                disabled={loading}
+              >
+                <RefreshCw
+                  className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                />
+                Read / Refresh
+              </Button>
+              <Button onClick={openCreateForm}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Position
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[90px]">ID</TableHead>
+                    <TableHead>Position Code</TableHead>
+                    <TableHead>Position Name</TableHead>
+                    <TableHead>Created At</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        Loading positions...
+                      </TableCell>
+                    </TableRow>
+                  ) : positions.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        No positions found. Click &quot;Create Position&quot; to
+                        add one.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    positions.map((pos) => (
+                      <TableRow key={pos.position_id}>
+                        <TableCell className="font-medium">
+                          {pos.position_id}
+                        </TableCell>
+                        <TableCell>{pos.position_code}</TableCell>
+                        <TableCell>{pos.position_name}</TableCell>
+                        <TableCell>
+                          {pos.created_at
+                            ? new Date(pos.created_at).toLocaleDateString()
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleViewPosition(pos.position_id)
+                              }
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Read
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openEditForm(pos)}
+                            >
+                              <Pencil className="w-4 h-4 mr-1" />
+                              Update
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(pos.position_id)}
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

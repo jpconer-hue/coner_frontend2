@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthGuard } from "../Hooks/useAuthGuard";
-import { clearTokens, getUserId } from "../lib/auth";
+import { clearTokens } from "../lib/auth";
 import { apiClient } from "../lib/api";
 import { CONFIG } from "../lib/config";
 
@@ -62,16 +63,22 @@ export default function DashboardPage() {
   const [expenseDate, setExpenseDate] = useState("");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [studentId, setStudentId] = useState("");
 
   // READ ALL (GET /expenses)
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
     setError("");
+
     try {
-      const data = await apiClient<Expense[]>(CONFIG.ENDPOINTS.EXPENSES, {
-        method: "GET",
-        requiresAuth: true,
-      });
+      const data = await apiClient<Expense[]>(
+        CONFIG.ENDPOINTS.EXPENSES,
+        {
+          method: "GET",
+          requiresAuth: true,
+        }
+      );
+
       setExpenses(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message || "Failed to fetch expenses.");
@@ -90,6 +97,7 @@ export default function DashboardPage() {
   const handleViewExpense = async (expenseId: number) => {
     setError("");
     setSuccess("");
+
     try {
       const data = await apiClient<Expense>(
         `${CONFIG.ENDPOINTS.EXPENSES}/${expenseId}`,
@@ -98,6 +106,7 @@ export default function DashboardPage() {
           requiresAuth: true,
         }
       );
+
       setSelectedExpense(data);
     } catch (err: any) {
       setError(err.message || "Failed to load expense details.");
@@ -110,6 +119,7 @@ export default function DashboardPage() {
     setExpenseDate("");
     setAmount("");
     setCategoryId("");
+    setStudentId("");
     setSelectedExpense(null);
     setError("");
     setSuccess("");
@@ -119,36 +129,43 @@ export default function DashboardPage() {
   // Open Form for UPDATE
   const openEditForm = (expense: Expense) => {
     setEditingId(expense.expense_id);
-    // Format YYYY-MM-DD for <input type="date" />
+
     setExpenseDate(
-      expense.expense_date ? expense.expense_date.split("T")[0] : ""
+      expense.expense_date
+        ? expense.expense_date.split("T")[0]
+        : ""
     );
+
     setAmount(String(expense.amount));
     setCategoryId(String(expense.category_id));
+    setStudentId(String(expense.student_id ?? ""));
+
     setSelectedExpense(null);
     setError("");
     setSuccess("");
     setIsFormOpen(true);
   };
 
+  // Close Form
   const closeForm = () => {
     setIsFormOpen(false);
     setEditingId(null);
     setExpenseDate("");
     setAmount("");
     setCategoryId("");
+    setStudentId("");
   };
 
   // CREATE (POST) & UPDATE (PUT)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     setSubmitting(true);
     setError("");
     setSuccess("");
 
-    const userId = getUserId();
-    if (!userId) {
-      setError("Unable to determine user ID from token. Please log in again.");
+    if (!expenseDate || !amount || !categoryId || !studentId) {
+      setError("Please complete all expense fields.");
       setSubmitting(false);
       return;
     }
@@ -156,26 +173,47 @@ export default function DashboardPage() {
     const payload = {
       expense_date: expenseDate,
       amount: Number(amount),
+      student_id: Number(studentId),
       category_id: Number(categoryId),
-      student_id: userId,
     };
+
+    if (
+      !Number.isFinite(payload.amount) ||
+      payload.amount <= 0 ||
+      !Number.isInteger(payload.student_id) ||
+      payload.student_id <= 0 ||
+      !Number.isInteger(payload.category_id) ||
+      payload.category_id <= 0
+    ) {
+      setError("Please enter valid amount, student ID, and category ID.");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       if (editingId !== null) {
         // UPDATE (PUT /expenses/:id)
-        await apiClient(`${CONFIG.ENDPOINTS.EXPENSES}/${editingId}`, {
-          method: "PUT",
-          requiresAuth: true,
-          body: JSON.stringify(payload),
-        });
+        await apiClient(
+          `${CONFIG.ENDPOINTS.EXPENSES}/${editingId}`,
+          {
+            method: "PUT",
+            requiresAuth: true,
+            body: JSON.stringify(payload),
+          }
+        );
+
         setSuccess(`Expense #${editingId} updated successfully.`);
       } else {
         // CREATE (POST /expenses)
-        await apiClient(CONFIG.ENDPOINTS.EXPENSES, {
-          method: "POST",
-          requiresAuth: true,
-          body: JSON.stringify(payload),
-        });
+        await apiClient(
+          CONFIG.ENDPOINTS.EXPENSES,
+          {
+            method: "POST",
+            requiresAuth: true,
+            body: JSON.stringify(payload),
+          }
+        );
+
         setSuccess("New expense added successfully.");
       }
 
@@ -193,15 +231,20 @@ export default function DashboardPage() {
     const confirmed = window.confirm(
       `Are you sure you want to delete Expense #${expenseId}?`
     );
+
     if (!confirmed) return;
 
     setError("");
     setSuccess("");
+
     try {
-      await apiClient(`${CONFIG.ENDPOINTS.EXPENSES}/${expenseId}`, {
-        method: "DELETE",
-        requiresAuth: true,
-      });
+      await apiClient(
+        `${CONFIG.ENDPOINTS.EXPENSES}/${expenseId}`,
+        {
+          method: "DELETE",
+          requiresAuth: true,
+        }
+      );
 
       if (selectedExpense?.expense_id === expenseId) {
         setSelectedExpense(null);
@@ -214,12 +257,13 @@ export default function DashboardPage() {
     }
   };
 
+  // LOGOUT
   const handleLogout = () => {
     clearTokens();
     router.push(CONFIG.ROUTES.LOGIN);
   };
 
-  // Dynamically sum Total Expenses for your summary card
+  // TOTAL EXPENSES
   const totalExpenses = expenses.reduce(
     (sum, item) => sum + Number(item.amount || 0),
     0
@@ -231,12 +275,16 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen w-full bg-gray-100">
+
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 hidden h-screen w-60 border-r bg-white p-6 md:flex md:flex-col">
         <h2 className="mb-2 text-lg font-bold text-green-600">
           Student Finance Tracker
         </h2>
-        <p className="mb-10 text-xs text-gray-400">Track your money wisely</p>
+
+        <p className="mb-10 text-xs text-gray-400">
+          Track your money wisely
+        </p>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-3">
@@ -297,7 +345,7 @@ export default function DashboardPage() {
           </a>
         </nav>
 
-        {/* Logout at the bottom */}
+        {/* Logout */}
         <div className="border-t pt-5">
           <Button
             variant="outline"
@@ -313,10 +361,14 @@ export default function DashboardPage() {
       {/* Main Dashboard */}
       <main className="p-5 md:ml-60 md:p-8">
         <div className="mx-auto max-w-6xl space-y-6">
+
           {/* Header */}
           <div id="home" className="flex items-center justify-between">
             <div>
-              <h1 id="dashboard" className="text-2xl font-bold text-gray-800">
+              <h1
+                id="dashboard"
+                className="text-2xl font-bold text-gray-800"
+              >
                 Dashboard
               </h1>
             </div>
@@ -333,13 +385,18 @@ export default function DashboardPage() {
 
           {/* Financial Summary */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
             <Card id="budget" className="border-green-200 shadow-sm">
               <CardContent className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">Total Budget</p>
+                  <p className="font-semibold text-gray-700">
+                    Total Budget
+                  </p>
                   <Wallet className="text-green-500" size={24} />
                 </div>
+
                 <h2 className="text-2xl font-bold text-green-600">₱0</h2>
+
                 <p className="mt-2 text-xs text-gray-400">
                   Your planned budget
                 </p>
@@ -349,10 +406,14 @@ export default function DashboardPage() {
             <Card id="allowance" className="border-green-200 shadow-sm">
               <CardContent className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">Total Allowance</p>
+                  <p className="font-semibold text-gray-700">
+                    Total Allowance
+                  </p>
                   <Banknote className="text-blue-500" size={24} />
                 </div>
+
                 <h2 className="text-2xl font-bold text-blue-600">₱0</h2>
+
                 <p className="mt-2 text-xs text-gray-400">
                   Your received allowance
                 </p>
@@ -362,12 +423,16 @@ export default function DashboardPage() {
             <Card className="border-green-200 shadow-sm">
               <CardContent className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">Total Expenses</p>
+                  <p className="font-semibold text-gray-700">
+                    Total Expenses
+                  </p>
                   <ShoppingBag className="text-red-500" size={24} />
                 </div>
+
                 <h2 className="text-2xl font-bold text-red-500">
                   ₱{totalExpenses.toFixed(2)}
                 </h2>
+
                 <p className="mt-2 text-xs text-gray-400">
                   Your total spending
                 </p>
@@ -377,11 +442,17 @@ export default function DashboardPage() {
             <Card id="savings" className="border-green-200 shadow-sm">
               <CardContent className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="font-semibold text-gray-700">Total Savings</p>
+                  <p className="font-semibold text-gray-700">
+                    Total Savings
+                  </p>
                   <PiggyBank className="text-purple-500" size={24} />
                 </div>
+
                 <h2 className="text-2xl font-bold text-purple-600">₱0</h2>
-                <p className="mt-2 text-xs text-gray-400">Your saved money</p>
+
+                <p className="mt-2 text-xs text-gray-400">
+                  Your saved money
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -392,6 +463,7 @@ export default function DashboardPage() {
               {error}
             </div>
           )}
+
           {success && (
             <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
               {success}
@@ -408,57 +480,112 @@ export default function DashboardPage() {
                       ? `Update Expense #${editingId}`
                       : "Add New Expense"}
                   </CardTitle>
+
                   <CardDescription>
                     {editingId !== null
                       ? "Modify the expense details below."
                       : "Fill in the details to record a new expense."}
                   </CardDescription>
                 </div>
-                <Button variant="ghost" size="icon" onClick={closeForm}>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={closeForm}
+                >
                   <X className="h-4 w-4" />
                 </Button>
               </CardHeader>
+
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+
+                  {/* Four Expense Fields */}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+
                     <div className="space-y-2">
-                      <Label htmlFor="expense_date">Expense Date</Label>
+                      <Label htmlFor="expense_date">
+                        Expense Date
+                      </Label>
+
                       <Input
                         id="expense_date"
                         type="date"
                         value={expenseDate}
-                        onChange={(e) => setExpenseDate(e.target.value)}
+                        onChange={(e) =>
+                          setExpenseDate(e.target.value)
+                        }
                         required
                       />
                     </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="amount">Amount (₱)</Label>
+                      <Label htmlFor="amount">
+                        Amount (₱)
+                      </Label>
+
                       <Input
                         id="amount"
                         type="number"
                         step="0.01"
+                        min="0.01"
                         placeholder="e.g. 250.00"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(e) =>
+                          setAmount(e.target.value)
+                        }
                         required
                       />
                     </div>
+
+                    {/* NEW: STUDENT ID */}
                     <div className="space-y-2">
-                      <Label htmlFor="category_id">Category ID</Label>
+                      <Label htmlFor="student_id">
+                        Student ID
+                      </Label>
+
+                      <Input
+                        id="student_id"
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 5"
+                        value={studentId}
+                        onChange={(e) =>
+                          setStudentId(e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category_id">
+                        Category ID
+                      </Label>
+
                       <Input
                         id="category_id"
                         type="number"
+                        min="1"
                         placeholder="e.g. 1"
                         value={categoryId}
-                        onChange={(e) => setCategoryId(e.target.value)}
+                        onChange={(e) =>
+                          setCategoryId(e.target.value)
+                        }
                         required
                       />
                     </div>
                   </div>
+
+                  {/* Form Buttons */}
                   <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={closeForm}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={closeForm}
+                    >
                       Cancel
                     </Button>
+
                     <Button
                       type="submit"
                       disabled={submitting}
@@ -484,11 +611,13 @@ export default function DashboardPage() {
                   <CardTitle>
                     Expense Details (#{selectedExpense.expense_id})
                   </CardTitle>
+
                   <CardDescription>
                     Fetched directly from GET {CONFIG.ENDPOINTS.EXPENSES}/
                     {selectedExpense.expense_id}
                   </CardDescription>
                 </div>
+
                 <Button
                   variant="ghost"
                   size="icon"
@@ -497,44 +626,65 @@ export default function DashboardPage() {
                   <X className="h-4 w-4" />
                 </Button>
               </CardHeader>
+
               <CardContent className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+
                 <div>
-                  <span className="block text-gray-400">Expense ID</span>
+                  <span className="block text-gray-400">
+                    Expense ID
+                  </span>
+
                   <span className="font-semibold">
                     {selectedExpense.expense_id}
                   </span>
                 </div>
+
                 <div>
-                  <span className="block text-gray-400">Date</span>
+                  <span className="block text-gray-400">
+                    Date
+                  </span>
+
                   <span className="font-semibold">
                     {selectedExpense.expense_date?.split("T")[0] || "N/A"}
                   </span>
                 </div>
+
                 <div>
-                  <span className="block text-gray-400">Amount</span>
+                  <span className="block text-gray-400">
+                    Amount
+                  </span>
+
                   <span className="font-semibold text-red-500">
                     ₱{Number(selectedExpense.amount).toFixed(2)}
                   </span>
                 </div>
+
                 <div>
-                  <span className="block text-gray-400">Category ID</span>
+                  <span className="block text-gray-400">
+                    Category ID
+                  </span>
+
                   <span className="font-semibold">
                     {selectedExpense.category_id}
                   </span>
                 </div>
+
               </CardContent>
             </Card>
           )}
 
           {/* Recent Expenses CRUD Table */}
           <Card id="expenses" className="border-green-200 shadow-sm">
+
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Recent Expenses</CardTitle>
+
                 <p className="text-sm text-gray-400">
                   Manage your spending activities (GET, POST, PUT, DELETE).
                 </p>
               </div>
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -542,10 +692,13 @@ export default function DashboardPage() {
                   disabled={loading}
                 >
                   <RefreshCw
-                    className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                    className={`mr-2 h-4 w-4 ${
+                      loading ? "animate-spin" : ""
+                    }`}
                   />
                   Refresh
                 </Button>
+
                 <Button
                   onClick={openCreateForm}
                   className="bg-green-600 hover:bg-green-700"
@@ -558,7 +711,9 @@ export default function DashboardPage() {
 
             <CardContent>
               <div className="overflow-x-auto">
+
                 <table className="w-full text-left text-sm">
+
                   <thead className="border-b text-gray-500">
                     <tr>
                       <th className="p-3">ID</th>
@@ -585,25 +740,34 @@ export default function DashboardPage() {
                           colSpan={5}
                           className="p-6 text-center text-gray-400"
                         >
-                          No expenses found. Click &quot;Add Expense&quot; to
-                          create one.
+                          No expenses found. Click "Add Expense" to create one.
                         </td>
                       </tr>
                     ) : (
                       expenses.map((expense) => (
-                        <tr key={expense.expense_id} className="border-b">
+                        <tr
+                          key={expense.expense_id}
+                          className="border-b"
+                        >
                           <td className="p-3 font-medium">
                             {expense.expense_id}
                           </td>
-                          <td className="p-3">{expense.category_id}</td>
+
+                          <td className="p-3">
+                            {expense.category_id}
+                          </td>
+
                           <td className="p-3">
                             {expense.expense_date?.split("T")[0] || "-"}
                           </td>
+
                           <td className="p-3 font-semibold text-red-500">
                             -₱{Number(expense.amount).toFixed(2)}
                           </td>
+
                           <td className="p-3 text-right">
                             <div className="flex justify-end gap-2">
+
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -614,6 +778,7 @@ export default function DashboardPage() {
                                 <Eye className="mr-1 h-4 w-4" />
                                 Read
                               </Button>
+
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -622,24 +787,30 @@ export default function DashboardPage() {
                                 <Pencil className="mr-1 h-4 w-4" />
                                 Update
                               </Button>
+
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => handleDelete(expense.expense_id)}
+                                onClick={() =>
+                                  handleDelete(expense.expense_id)
+                                }
                               >
                                 <Trash2 className="mr-1 h-4 w-4" />
                                 Delete
                               </Button>
+
                             </div>
                           </td>
                         </tr>
                       ))
                     )}
                   </tbody>
+
                 </table>
               </div>
             </CardContent>
           </Card>
+
         </div>
       </main>
     </div>

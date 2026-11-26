@@ -1,3 +1,4 @@
+// lib/auth.ts
 import { CONFIG } from "./config";
 
 export const getAccessToken = (): string | null => {

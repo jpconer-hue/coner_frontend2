@@ -1,7 +1,7 @@
 
 export const CONFIG = {
   API_BASE_URL:
-    process.env.NEXT_PUBLIC_API_BASE_URL || "link",
+    process.env.NEXT_PUBLIC_API_BASE_URL || "https://backend-ykig.onrender.com",
 
   STORAGE_KEYS: {
     ACCESS_TOKEN: "accessToken",

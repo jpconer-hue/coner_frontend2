@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -7,9 +8,11 @@ import { useAuthGuard } from "../Hooks/useAuthGuard";
 import { apiClient } from "../lib/api";
 import { setTokens } from "../lib/auth";
 import { CONFIG } from "../lib/config";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 import {
   Card,
   CardContent,
@@ -27,6 +30,7 @@ interface LoginResponse {
 export default function LoginPage() {
   const router = useRouter();
   const { isChecking } = useAuthGuard({ requireAuth: false });
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +51,7 @@ export default function LoginPage() {
 
       setTokens(data.accessToken, data.refreshToken);
       router.push(CONFIG.ROUTES.DASHBOARD);
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -56,20 +61,41 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 bg-background">
+
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>Enter your credentials to access your account.</CardDescription>
-        </CardHeader>
+
+       <CardHeader className="text-center">
+
+  <p className="text-sm font-semibold text-green-600">
+    Student Finance Tracker
+  </p>
+
+  <CardTitle className="text-2xl">
+    Login
+  </CardTitle>
+
+  <CardDescription>
+    Enter your credentials to access your account.
+  </CardDescription>
+
+</CardHeader>
+
         <form onSubmit={handleLogin}>
+
           <CardContent className="space-y-4">
+
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/50 rounded-md border border-red-200 dark:border-red-900">
                 {error}
               </div>
             )}
+
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+
+              <Label htmlFor="username">
+                Username
+              </Label>
+
               <Input
                 id="username"
                 type="text"
@@ -77,9 +103,15 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
+
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+
+              <Label htmlFor="password">
+                Password
+              </Label>
+
               <Input
                 id="password"
                 type="password"
@@ -87,21 +119,37 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+
             </div>
+
           </CardContent>
+
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+
+            <Button
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-700"
+              disabled={loading}
+            >
               {loading ? "Logging in..." : "Login"}
             </Button>
+
             <p className="text-sm text-center text-muted-foreground">
               Don't have an account?{" "}
-              <Link href={CONFIG.ROUTES.REGISTER} className="text-primary underline">
+              <Link
+                href={CONFIG.ROUTES.REGISTER}
+                className="text-primary underline"
+              >
                 Register
               </Link>
             </p>
+
           </CardFooter>
+
         </form>
+
       </Card>
+
     </div>
   );
 }

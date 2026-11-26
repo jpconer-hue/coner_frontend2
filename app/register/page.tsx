@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -6,9 +7,11 @@ import Link from "next/link";
 import { useAuthGuard } from "../Hooks/useAuthGuard";
 import { apiClient } from "../lib/api";
 import { CONFIG } from "../lib/config";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 import {
   Card,
   CardContent,
@@ -21,6 +24,7 @@ import {
 export default function RegisterPage() {
   const router = useRouter();
   const { isChecking } = useAuthGuard({ requireAuth: false });
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -40,6 +44,7 @@ export default function RegisterPage() {
       });
 
       router.push(CONFIG.ROUTES.LOGIN);
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -49,20 +54,40 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 bg-background">
+
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Create Account</CardTitle>
-          <CardDescription>Register a new account to get started.</CardDescription>
+
+        <CardHeader className="text-center">
+
+          <p className="text-sm font-semibold text-green-600">
+            Student Finance Tracker
+          </p>
+
+          <CardTitle className="text-2xl">
+            Create Account
+          </CardTitle>
+
+          <CardDescription>
+            Register a new account to get started.
+          </CardDescription>
+
         </CardHeader>
+
         <form onSubmit={handleRegister}>
+
           <CardContent className="space-y-4">
+
             {error && (
               <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950/50 rounded-md border border-red-200 dark:border-red-900">
                 {error}
               </div>
             )}
+
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">
+                Username
+              </Label>
+
               <Input
                 id="username"
                 type="text"
@@ -71,8 +96,12 @@ export default function RegisterPage() {
                 required
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">
+                Password
+              </Label>
+
               <Input
                 id="password"
                 type="password"
@@ -81,20 +110,35 @@ export default function RegisterPage() {
                 required
               />
             </div>
+
           </CardContent>
+
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
+
+            <Button
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-700"
+              disabled={loading}
+            >
               {loading ? "Registering..." : "Register"}
             </Button>
+
             <p className="text-sm text-center text-muted-foreground">
               Already have an account?{" "}
-              <Link href={CONFIG.ROUTES.LOGIN} className="text-primary underline">
+              <Link
+                href={CONFIG.ROUTES.LOGIN}
+                className="text-primary underline"
+              >
                 Login
               </Link>
             </p>
+
           </CardFooter>
+
         </form>
+
       </Card>
+
     </div>
   );
 }
